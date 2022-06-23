@@ -1,0 +1,14 @@
+{
+    "XXXToken": "0xB1EA2A3D11d3B3a76EBA2656E2DfFdc86bFF6274",
+    "uniswapV2Router02": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+    "XxxEthPairAddress": "0x83304b920614d831c71A8D9aD790336263c822BF",
+
+    "Staking": "0xfdE1041511Fa31F527863a3BCbfE9c5901A5e4AB",
+    "Dao": "0x31EfcEE576248575ca09d62979A2c8901310d3A6",
+    "ACDMToken": "0x8Fe322522ba5ae470B88C28B088e2B7599d16189",
+    "ACDMPlatform": "0x05C49f96ab07B689e9128BCe6024d44031715Db1",
+    
+    "debatingPeriodDuration": "3600",
+    "chairPersonAddress": "0x624c31357a67344f6d0278a6ef1F839E2136D735",
+    "minimumQuorum": "0.1"
+}
