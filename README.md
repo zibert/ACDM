@@ -25,30 +25,30 @@ https://rinkeby.etherscan.io/address/0xB1EA2A3D11d3B3a76EBA2656E2DfFdc86bFF6274#
 
 ## Staking
 
-npx hardhat verify --network rinkeby --constructor-args argumentsStaking.js 0xfdE1041511Fa31F527863a3BCbfE9c5901A5e4AB <br />
-https://rinkeby.etherscan.io/address/0xfdE1041511Fa31F527863a3BCbfE9c5901A5e4AB#code <br />
+npx hardhat verify --network rinkeby --constructor-args argumentsStaking.js 0x0282c5CFB6421D729Ce6d36d13eeaE4862525585 <br />
+https://rinkeby.etherscan.io/address/0x0282c5CFB6421D729Ce6d36d13eeaE4862525585#code <br />
 
 ## DAO
 
-npx hardhat verify --network rinkeby --constructor-args argumentsDao.js 0x31EfcEE576248575ca09d62979A2c8901310d3A6 <br />
-https://rinkeby.etherscan.io/address/0x31EfcEE576248575ca09d62979A2c8901310d3A6#code <br />
+npx hardhat verify --network rinkeby --constructor-args argumentsDao.js 0xF856F257a965C95c732A7d8748c8ED4cab1E3B3F <br />
+https://rinkeby.etherscan.io/address/0xF856F257a965C95c732A7d8748c8ED4cab1E3B3F#code <br />
 
 ## ACDMToken
 
-npx hardhat verify --network rinkeby 0x8Fe322522ba5ae470B88C28B088e2B7599d16189 <br />
-https://rinkeby.etherscan.io/address/0x8Fe322522ba5ae470B88C28B088e2B7599d16189#code <br />
+npx hardhat verify --network rinkeby 0x916B56f2BcBB4a361161162D1C0FC479ae686708 <br />
+https://rinkeby.etherscan.io/address/0x916B56f2BcBB4a361161162D1C0FC479ae686708#code <br />
 
 ## ACDMPlatform
 
-npx hardhat verify --network rinkeby --constructor-args argumentsAcdmPlatform.js 0x05C49f96ab07B689e9128BCe6024d44031715Db1 <br />
-https://rinkeby.etherscan.io/address/0x05C49f96ab07B689e9128BCe6024d44031715Db1#code <br />
+npx hardhat verify --network rinkeby --constructor-args argumentsAcdmPlatform.js 0xD0321e4e4da10b86D56611117bc20182Bc891E95 <br />
+https://rinkeby.etherscan.io/address/0xD0321e4e4da10b86D56611117bc20182Bc891E95#code <br />
 
 # Tasks 
 
 ## mint XXX tokens example: 
 
 npx hardhat mintXXX --network rinkeby --to 0x624c31357a67344f6d0278a6ef1F839E2136D735 --xxx 100.0 <br />
-npx hardhat mintXXX --network rinkeby --to 0xfdE1041511Fa31F527863a3BCbfE9c5901A5e4AB --xxx 100.0 <br />
+npx hardhat mintXXX --network rinkeby --to 0xC413AeD1E837F528670f8bf27C4Eed9AFCDB7bB5 --xxx 100.0 <br />
 
 ## addLiquidityETH example: 
 
@@ -60,7 +60,7 @@ npx hardhat createPairXxxEth --network rinkeby <br />
 
 ## stake example: 
 
-npx hardhat stake --network rinkeby --amount 0.1 <br />
+npx hardhat stake --network rinkeby --amount 0.001 <br />
 
 ## claim example: 
 

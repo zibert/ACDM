@@ -3,7 +3,11 @@ import "@nomiclabs/hardhat-waffle";
 
 import { Contract, ContractReceipt } from "ethers";
 
+import { MerkleTree } from 'merkletreejs';
+import keccak256 from 'keccak256';
+
 import config from '../config.json'
+import { env } from "process";
 
 const getEventData = (
     eventName: string,
@@ -24,10 +28,25 @@ const getEventData = (
     return null;
 };
 
+const getLeaf = function (address: any) {
+    return 
+}
+
 task("stake")
     .addParam("amount", "amount of tokens")
     .setAction(async (args, hre) => {
+        const leafes = config.whiteList.map(
+            addr => keccak256(hre.web3.eth.abi.encodeParameters(['address'], [addr]))
+        )
+        
+        const tree = new MerkleTree(leafes, keccak256, {
+            sortLeaves: true,
+            sortPairs: true
+        })
+
         let amount = hre.ethers.utils.parseEther(args.amount)
+        let signers = await hre.ethers.getSigners();
+        let user = signers[0]
 
         const uniswapV2Pair = (await hre.ethers.getContractAt("IUniswapV2Pair", config.XxxEthPairAddress))
         const staking = (await hre.ethers.getContractFactory("Staking")).attach(config.Staking);
@@ -38,7 +57,10 @@ task("stake")
         }
 
         const receipt = await (
-            await staking.stake(amount, options))
+            await staking.stake(
+                amount, 
+                tree.getHexProof(keccak256(hre.web3.eth.abi.encodeParameters(['address'], [user.address]))), 
+                options))
             .wait();
 
         console.log("staking id: " + getEventData("Stacked", staking, receipt).id);

@@ -1,4 +1,4 @@
-import { ethers, waffle, network } from 'hardhat'
+import { ethers, waffle, network, web3 } from 'hardhat'
 import chai from 'chai'
 
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/dist/src/signer-with-address"
@@ -14,6 +14,23 @@ import { DAO } from '../src/types/DAO'
 
 const { deployContract } = waffle
 const { expect } = chai
+
+import { MerkleTree } from 'merkletreejs';
+import keccak256 from 'keccak256';
+
+const getTree = function (addresses: any[]) {
+    const leaves = addresses.map(addr => keccak256(web3.eth.abi.encodeParameters(['address'], [addr])))
+        
+    const tree = new MerkleTree(leaves, keccak256, {
+      sortLeaves: true,
+      sortPairs: true
+    })
+    return tree;
+}
+
+const getLeaf = function (address: any) {
+    return keccak256(web3.eth.abi.encodeParameters(['address'], [address]))
+}
 
 const getSignature = function (value: any) {
     var jsonAbi = [{
@@ -45,6 +62,9 @@ describe('Staking common Test', () => {
     let acc2: SignerWithAddress;
     let acc3: SignerWithAddress;
 
+    let tree: MerkleTree;
+    let wlAddresses;
+
     beforeEach(async () => {
         signers = await ethers.getSigners();
         let network = await ethers.provider.getNetwork();
@@ -54,9 +74,17 @@ describe('Staking common Test', () => {
         acc2 = signers[2];
         acc3 = signers[3];
 
+        wlAddresses = [
+            owner.address,
+            acc1.address,
+            acc2.address
+          ]
+        tree = getTree(wlAddresses);
+
         xxxToken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
         lptoken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
-        staking = (await deployContract(signers[0], StakingArtifacts, [lptoken.address, xxxToken.address])) as Staking
+        staking = (await deployContract(signers[0], StakingArtifacts, 
+            [lptoken.address, xxxToken.address, tree.getHexRoot()])) as Staking
         dao = (await deployContract(signers[0], DAOArtifacts,
             [owner.address, staking.address, ethers.utils.parseEther("10.0"), 3600 * 24])) as DAO;
         await staking.setDao(dao.address);
@@ -79,33 +107,33 @@ describe('Staking common Test', () => {
     })
 
     it('stake should be reverted if nothing was sent', async () => {
-        await expect(staking.stake(0)).to.be.revertedWith(
+        await expect(staking.stake(0, tree.getHexProof(getLeaf(owner.address)))).to.be.revertedWith(
             "amount must be more then 0"
         );
     })
 
     it('stake should be correct', async () => {
         expect(await staking.getBalance(owner.address)).to.eq(0)
-        await staking.stake(ethers.utils.parseEther("1"));
+        await staking.stake(ethers.utils.parseEther("1"), tree.getHexProof(getLeaf(owner.address)));
         expect(await staking.getBalance(owner.address)).to.eq(ethers.utils.parseEther("1"))
     })
 
     it('claim should be reverted if not owner call it', async () => {
-        await staking.stake(ethers.utils.parseEther("1"));
+        await staking.stake(ethers.utils.parseEther("1"), tree.getHexProof(getLeaf(owner.address)));
         await expect(staking.connect(acc1).claim(0)).to.be.revertedWith(
             "you are not a owner"
         );
     })
 
     it('claim should be revertedif there is no award yet', async () => {
-        await staking.stake(ethers.utils.parseEther("1"));
+        await staking.stake(ethers.utils.parseEther("1"), tree.getHexProof(getLeaf(owner.address)));
         await expect(staking.claim(0)).to.be.revertedWith(
             "nothing to transfer"
         );
     })
 
     it('claim should be correct', async () => {
-        await staking.stake(ethers.utils.parseEther("10"));
+        await staking.stake(ethers.utils.parseEther("10"), tree.getHexProof(getLeaf(owner.address)));
 
         await network.provider.send("evm_increaseTime", [3600 * 24 * 10 + 1])
         await network.provider.send("evm_mine")
@@ -129,7 +157,7 @@ describe('Staking common Test', () => {
 
 
     it('claim should be rewverted if requested twice', async () => {
-        await staking.stake(ethers.utils.parseEther("10"));
+        await staking.stake(ethers.utils.parseEther("10"), tree.getHexProof(getLeaf(owner.address)));
 
         await network.provider.send("evm_increaseTime", [3600 * 24 * 7 + 1])
         await network.provider.send("evm_mine")
@@ -141,7 +169,7 @@ describe('Staking common Test', () => {
     })
 
     it('unstake should be reverted if it is not the owner who has requested it', async () => {
-        await staking.stake(ethers.utils.parseEther("10"));
+        await staking.stake(ethers.utils.parseEther("10"), tree.getHexProof(getLeaf(owner.address)));
 
         await expect(staking.connect(acc1).unstake(0)).to.be.revertedWith(
             "you are not a owner"
@@ -149,7 +177,7 @@ describe('Staking common Test', () => {
     })
 
     it('unstake should be reverted if requested twice', async () => {
-        await staking.stake(ethers.utils.parseEther("10"));
+        await staking.stake(ethers.utils.parseEther("10"), tree.getHexProof(getLeaf(owner.address)));
 
         await network.provider.send("evm_increaseTime", [3600 * 24 * 3 + 1])
         await network.provider.send("evm_mine")
@@ -161,7 +189,7 @@ describe('Staking common Test', () => {
     })
 
     it('unstake should be reverted if the necessary time has not yet past', async () => {
-        await staking.stake(ethers.utils.parseEther("10"));
+        await staking.stake(ethers.utils.parseEther("10"), tree.getHexProof(getLeaf(owner.address)));
 
         await expect(staking.unstake(0)).to.be.revertedWith(
             "time for unstaking has not come"
@@ -169,7 +197,7 @@ describe('Staking common Test', () => {
     })
 
     it('unstake should be reverted if there is active voting', async () => {
-        await staking.stake(ethers.utils.parseEther("10"));
+        await staking.stake(ethers.utils.parseEther("10"), tree.getHexProof(getLeaf(owner.address)));
         await dao.addProposal(
             staking.address,
             "0xe3300f4d0000000000000000000000000000000000000000000000000000000000000014",
@@ -185,7 +213,7 @@ describe('Staking common Test', () => {
     })
 
     it('unstake should be correct', async () => {
-        await staking.stake(ethers.utils.parseEther("10"));
+        await staking.stake(ethers.utils.parseEther("10"), tree.getHexProof(getLeaf(owner.address)));
 
         await network.provider.send("evm_increaseTime", [3600 * 24 * 3 + 1])
         await network.provider.send("evm_mine")
@@ -196,7 +224,7 @@ describe('Staking common Test', () => {
     })
 
     it('setTimeToUnstake should be correct', async () => {
-        await staking.stake(ethers.utils.parseEther("10"));
+        await staking.stake(ethers.utils.parseEther("10"), tree.getHexProof(getLeaf(owner.address)));
         await dao.addProposal(
             staking.address,
             getSignature(42),
@@ -228,6 +256,9 @@ describe('Staking common Test', () => {
     let acc2: SignerWithAddress;
     let acc3: SignerWithAddress;
 
+    let tree: MerkleTree;
+    let wlAddresses;
+
     beforeEach(async () => {
         signers = await ethers.getSigners();
 
@@ -236,14 +267,28 @@ describe('Staking common Test', () => {
         acc2 = signers[2];
         acc3 = signers[3];
 
+        wlAddresses = [
+            owner.address,
+            acc1.address,
+            acc2.address
+          ]
+        tree = getTree(wlAddresses);
+
         xxxToken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
         lptoken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
-        staking = (await deployContract(signers[0], StakingArtifacts, [lptoken.address, xxxToken.address])) as Staking
+        staking = (await deployContract(signers[0], StakingArtifacts, 
+            [lptoken.address, xxxToken.address, tree.getHexRoot()])) as Staking
     })
 
     it('setTimeToUnstake should be reverted if not owner call it', async () => {
         await expect(staking.setTimeToUnstake(0)).to.be.revertedWith(
             "dao isin't init"
+        );
+    })
+
+    it('stake should be reverted if not in white list', async () => {
+        await expect(staking.connect(acc3).stake(ethers.utils.parseEther("10"), tree.getHexProof(getLeaf(acc3.address)))).to.be.revertedWith(
+            "not in white list"
         );
     })
 })

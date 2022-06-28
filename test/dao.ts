@@ -1,4 +1,4 @@
-import { ethers, waffle, network } from 'hardhat'
+import { ethers, waffle, network, web3 } from 'hardhat'
 import chai from 'chai'
 
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/dist/src/signer-with-address"
@@ -16,6 +16,23 @@ const { deployContract } = waffle
 const { expect } = chai
 
 import { BigNumber, Contract, ContractReceipt } from "ethers";
+
+import { MerkleTree } from 'merkletreejs';
+import keccak256 from 'keccak256';
+
+const getTree = function (addresses: any[]) {
+    const leaves = addresses.map(addr => keccak256(web3.eth.abi.encodeParameters(['address'], [addr])))
+        
+    const tree = new MerkleTree(leaves, keccak256, {
+      sortLeaves: true,
+      sortPairs: true
+    })
+    return tree;
+}
+
+const getLeaf = function (address: any) {
+    return keccak256(web3.eth.abi.encodeParameters(['address'], [address]))
+}
 
 const getSignature = function (value: any) {
     var jsonAbi = [{
@@ -68,6 +85,9 @@ describe('DAO common Test', () => {
     let chairPerson: SignerWithAddress;
     let proposalId: any;
 
+    let tree: MerkleTree;
+    let wlAddresses;
+
     beforeEach(async () => {
         signers = await ethers.getSigners();
         let network = await ethers.provider.getNetwork();
@@ -78,9 +98,19 @@ describe('DAO common Test', () => {
         acc3 = signers[3];
         chairPerson = signers[4];
 
+
+        wlAddresses = [
+            owner.address,
+            acc1.address,
+            acc2.address,
+            acc3.address
+          ]
+        tree = getTree(wlAddresses);
+
         lptoken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
         xxxToken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
-        staking = (await deployContract(signers[0], StakingArtifacts, [lptoken.address, xxxToken.address])) as Staking
+        staking = (await deployContract(signers[0], StakingArtifacts, 
+            [lptoken.address, xxxToken.address, tree.getHexRoot()])) as Staking
         dao = (await deployContract(signers[0], DAOArtifacts,
             [chairPerson.address, staking.address, ethers.utils.parseEther("10.0"), 3600 * 24 * 3])) as DAO;
         await staking.setDao(dao.address);
@@ -115,9 +145,9 @@ describe('DAO common Test', () => {
     })
 
     it('getVotes should be correct', async () => {
-        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"));
-        await staking.connect(acc2).stake(ethers.utils.parseEther("5.0"));
-        await staking.connect(acc3).stake(ethers.utils.parseEther("9.0"));
+        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"), tree.getHexProof(getLeaf(acc1.address)));
+        await staking.connect(acc2).stake(ethers.utils.parseEther("5.0"), tree.getHexProof(getLeaf(acc2.address)));
+        await staking.connect(acc3).stake(ethers.utils.parseEther("9.0"), tree.getHexProof(getLeaf(acc3.address)));
 
         await dao.connect(acc1).vote(proposalId, true)
         await dao.connect(acc2).vote(proposalId, false)
@@ -140,9 +170,9 @@ describe('DAO common Test', () => {
     })
 
     it('delegation to voted address should be reverted', async () => {
-        await staking.connect(acc2).stake(ethers.utils.parseEther("5.0"));
+        await staking.connect(acc2).stake(ethers.utils.parseEther("5.0"), tree.getHexProof(getLeaf(acc2.address)));
         await dao.connect(acc2).vote(proposalId, false)
-        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"));
+        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"), tree.getHexProof(getLeaf(acc1.address)));
 
         await expect(dao.connect(acc1).delegate(proposalId, acc2.address)).to.be.revertedWith(
             "delegation to voted"
@@ -150,7 +180,7 @@ describe('DAO common Test', () => {
     })
 
     it('second delegation to address should be reverted', async () => {
-        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"));
+        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"), tree.getHexProof(getLeaf(acc1.address)));
         await dao.connect(acc1).delegate(proposalId, acc2.address);
 
         await expect(dao.connect(acc1).delegate(proposalId, acc3.address)).to.be.revertedWith(
@@ -159,13 +189,13 @@ describe('DAO common Test', () => {
     })
 
     it('delegation should be correct', async () => {
-        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"));
+        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"), tree.getHexProof(getLeaf(acc1.address)));
         await dao.connect(acc1).delegate(proposalId, acc2.address);
 
-        await staking.connect(acc3).stake(ethers.utils.parseEther("7.0"));
+        await staking.connect(acc3).stake(ethers.utils.parseEther("7.0"), tree.getHexProof(getLeaf(acc3.address)));
         await dao.connect(acc3).delegate(proposalId, acc2.address);
 
-        await staking.connect(acc2).stake(ethers.utils.parseEther("5.0"));
+        await staking.connect(acc2).stake(ethers.utils.parseEther("5.0"), tree.getHexProof(getLeaf(acc2.address)));
 
         await dao.connect(acc2).vote(proposalId, false)
         expect((await dao.getVotes(proposalId, false))).to.eq(ethers.utils.parseEther("15.0"))
@@ -186,7 +216,7 @@ describe('DAO common Test', () => {
     })
 
     it('voting with overtime should be reverted', async () => {
-        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"));
+        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"), tree.getHexProof(getLeaf(acc1.address)));
 
         await network.provider.send("evm_increaseTime", [3600 * 24 * 3 + 1])
         await network.provider.send("evm_mine");
@@ -197,7 +227,7 @@ describe('DAO common Test', () => {
     })
 
     it('second voting should be reverted', async () => {
-        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"));
+        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"), tree.getHexProof(getLeaf(acc1.address)));
         await dao.connect(acc1).vote(proposalId, true);
 
         await expect(dao.connect(acc1).vote(proposalId, false)).to.be.revertedWith(
@@ -206,7 +236,7 @@ describe('DAO common Test', () => {
     })
 
     it('voting with delegetion should be reverted', async () => {
-        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"));
+        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"), tree.getHexProof(getLeaf(acc1.address)));
         await dao.connect(acc1).delegate(proposalId, acc2.address);
 
         await expect(dao.connect(acc1).vote(proposalId, false)).to.be.revertedWith(
@@ -221,7 +251,7 @@ describe('DAO common Test', () => {
     })
 
     it('voting with zero balance and delegation should be correct', async () => {
-        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"));
+        await staking.connect(acc1).stake(ethers.utils.parseEther("3.0"), tree.getHexProof(getLeaf(acc1.address)));
         await dao.connect(acc1).delegate(proposalId, acc2.address);
 
         await dao.connect(acc2).vote(proposalId, false);
@@ -248,10 +278,10 @@ describe('DAO common Test', () => {
     })
 
     it('finishProposal with MinimumQuorumNotReached-event should be correct', async () => {
-        await staking.connect(acc1).stake(ethers.utils.parseEther("1.0"));
+        await staking.connect(acc1).stake(ethers.utils.parseEther("1.0"), tree.getHexProof(getLeaf(acc1.address)));
         await dao.connect(acc1).vote(proposalId, true);
 
-        await staking.connect(acc2).stake(ethers.utils.parseEther("3.0"));
+        await staking.connect(acc2).stake(ethers.utils.parseEther("3.0"), tree.getHexProof(getLeaf(acc2.address)));
         await dao.connect(acc2).vote(proposalId, false);
 
         await network.provider.send("evm_increaseTime", [3600 * 24 * 3 + 1])
@@ -270,10 +300,10 @@ describe('DAO common Test', () => {
     })
 
     it('finishProposal with rejected proposal should be correct', async () => {
-        await staking.connect(acc1).stake(ethers.utils.parseEther("8.0"));
+        await staking.connect(acc1).stake(ethers.utils.parseEther("8.0"), tree.getHexProof(getLeaf(acc1.address)));
         await dao.connect(acc1).vote(proposalId, false);
 
-        await staking.connect(acc2).stake(ethers.utils.parseEther("3.0"));
+        await staking.connect(acc2).stake(ethers.utils.parseEther("3.0"), tree.getHexProof(getLeaf(acc2.address)));
         await dao.connect(acc2).vote(proposalId, true);
 
         await network.provider.send("evm_increaseTime", [3600 * 24 * 3 + 1])
@@ -292,10 +322,10 @@ describe('DAO common Test', () => {
     })
 
     it('finishProposal with approved proposal should be correct', async () => {
-        await staking.connect(acc1).stake(ethers.utils.parseEther("8.0"));
+        await staking.connect(acc1).stake(ethers.utils.parseEther("8.0"), tree.getHexProof(getLeaf(acc1.address)));
         await dao.connect(acc1).vote(proposalId, true);
 
-        await staking.connect(acc2).stake(ethers.utils.parseEther("3.0"));
+        await staking.connect(acc2).stake(ethers.utils.parseEther("3.0"), tree.getHexProof(getLeaf(acc2.address)));
         await dao.connect(acc2).vote(proposalId, false);
 
         await network.provider.send("evm_increaseTime", [3600 * 24 * 3 + 1])

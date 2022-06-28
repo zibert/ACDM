@@ -1,13 +1,28 @@
-import { ethers } from "hardhat";
+import { ethers, web3 } from "hardhat";
 import hre from 'hardhat'
+
+import { MerkleTree } from 'merkletreejs';
+import keccak256 from 'keccak256';
 
 import config from '../config.json'
 
+const getTree = function (addresses: any[]) {
+  const leaves = addresses.map(addr => keccak256(web3.eth.abi.encodeParameters(['address'], [addr])))
+  const tree = new MerkleTree(leaves, keccak256, {
+    sortLeaves: true,
+    sortPairs: true
+  })
+  return tree;
+}
+
 async function main() {
+  const treeRoot = getTree(config.whiteList).getHexRoot();
+  console.log("treeRoot: " + treeRoot)
   const Staking = await ethers.getContractFactory("Staking");
   const staking = await Staking.deploy(
     config.XxxEthPairAddress,
-    config.XXXToken
+    config.XXXToken,
+    treeRoot
   );
   await staking.deployed();
   console.log("staking deployed to: ", staking.address);

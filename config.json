@@ -3,12 +3,17 @@
     "uniswapV2Router02": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
     "XxxEthPairAddress": "0x83304b920614d831c71A8D9aD790336263c822BF",
 
-    "Staking": "0xfdE1041511Fa31F527863a3BCbfE9c5901A5e4AB",
-    "Dao": "0x31EfcEE576248575ca09d62979A2c8901310d3A6",
-    "ACDMToken": "0x8Fe322522ba5ae470B88C28B088e2B7599d16189",
-    "ACDMPlatform": "0x05C49f96ab07B689e9128BCe6024d44031715Db1",
+    "Staking": "0x0282c5CFB6421D729Ce6d36d13eeaE4862525585",
+    "Dao": "0xF856F257a965C95c732A7d8748c8ED4cab1E3B3F",
+    "ACDMToken": "0x916B56f2BcBB4a361161162D1C0FC479ae686708",
+    "ACDMPlatform": "0xD0321e4e4da10b86D56611117bc20182Bc891E95",
     
     "debatingPeriodDuration": "3600",
     "chairPersonAddress": "0x624c31357a67344f6d0278a6ef1F839E2136D735",
-    "minimumQuorum": "0.1"
+    "minimumQuorum": "0.1",
+    "whiteList": [
+        "0x624c31357a67344f6d0278a6ef1F839E2136D735",
+        "0x319CEA3D2f32cdD2A4a5Ba31df9a8FE36e2ad254"
+    ],
+    "treeRoot": "0x69af1a7bb57ac6e663c80f5a45d4fa59bf3b43fa22489b35f339bf20f2428f1e"
 }

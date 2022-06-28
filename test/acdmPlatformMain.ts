@@ -27,6 +27,23 @@ const { expect } = chai
 
 import { BigNumber, Contract, ContractReceipt } from "ethers";
 
+import { MerkleTree } from 'merkletreejs';
+import keccak256 from 'keccak256';
+
+const getTree = function (addresses: any[]) {
+    const leaves = addresses.map(addr => keccak256(web3.eth.abi.encodeParameters(['address'], [addr])))
+        
+    const tree = new MerkleTree(leaves, keccak256, {
+      sortLeaves: true,
+      sortPairs: true
+    })
+    return tree;
+}
+
+const getLeaf = function (address: any) {
+    return keccak256(web3.eth.abi.encodeParameters(['address'], [address]))
+}
+
 const getEventData = (
     eventName: string,
     contract: Contract,
@@ -61,6 +78,9 @@ describe("ACDMPlatform - the first sales round test", function () {
     let acc3: SignerWithAddress;
     let chairPerson: SignerWithAddress;
 
+    let tree: MerkleTree;
+    let wlAddresses;
+
     beforeEach(async () => {
         signers = await ethers.getSigners();
 
@@ -70,12 +90,19 @@ describe("ACDMPlatform - the first sales round test", function () {
         acc3 = signers[3];
         chairPerson = signers[4];
 
+        wlAddresses = [
+            owner.address,
+            acc1.address,
+            acc2.address
+          ]
+        tree = getTree(wlAddresses);
+
         acdmToken = (await deployContract(owner, ACDMTokenArtifacts)) as ACDMToken;
 
         lptoken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
         xxxToken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
-        staking = (await deployContract(signers[0], StakingArtifacts, [lptoken.address, xxxToken.address])) as Staking
-
+        staking = (await deployContract(signers[0], StakingArtifacts, 
+            [lptoken.address, xxxToken.address, tree.getHexRoot()])) as Staking
         dao = (await deployContract(signers[0], DAOArtifacts,
             [chairPerson.address, staking.address, ethers.utils.parseEther("10.0"), 3600 * 24 * 3])) as DAO;
 
@@ -259,12 +286,23 @@ describe("ACDMPlatform - trade round test", function () {
         acc3 = signers[3];
         chairPerson = signers[4];
 
+        let tree: MerkleTree;
+        let wlAddresses;
+
+
+        wlAddresses = [
+            owner.address,
+            acc1.address,
+            acc2.address
+          ]
+        tree = getTree(wlAddresses);
+
         acdmToken = (await deployContract(owner, ACDMTokenArtifacts)) as ACDMToken;
 
         lptoken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
         xxxToken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
-        staking = (await deployContract(signers[0], StakingArtifacts, [lptoken.address, xxxToken.address])) as Staking
-
+        staking = (await deployContract(signers[0], StakingArtifacts, 
+            [lptoken.address, xxxToken.address, tree.getHexRoot()])) as Staking
         dao = (await deployContract(signers[0], DAOArtifacts,
             [chairPerson.address, staking.address, ethers.utils.parseEther("10.0"), 3600 * 24 * 3])) as DAO;
 
@@ -435,6 +473,9 @@ describe("ACDMPlatform - new sale round test", function () {
     let acc3: SignerWithAddress;
     let chairPerson: SignerWithAddress;
 
+    let tree: MerkleTree;
+    let wlAddresses;
+
     beforeEach(async () => {
         signers = await ethers.getSigners();
 
@@ -444,12 +485,19 @@ describe("ACDMPlatform - new sale round test", function () {
         acc3 = signers[3];
         chairPerson = signers[4];
 
+        wlAddresses = [
+            owner.address,
+            acc1.address,
+            acc2.address
+          ]
+        tree = getTree(wlAddresses);
+
         acdmToken = (await deployContract(owner, ACDMTokenArtifacts)) as ACDMToken;
 
         lptoken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
         xxxToken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
-        staking = (await deployContract(signers[0], StakingArtifacts, [lptoken.address, xxxToken.address])) as Staking
-
+        staking = (await deployContract(signers[0], StakingArtifacts, 
+            [lptoken.address, xxxToken.address, tree.getHexRoot()])) as Staking
         dao = (await deployContract(signers[0], DAOArtifacts,
             [chairPerson.address, staking.address, ethers.utils.parseEther("10.0"), 3600 * 24 * 3])) as DAO;
 

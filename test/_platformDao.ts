@@ -33,6 +33,9 @@ const { expect } = chai
 
 import { BigNumber, Contract, ContractReceipt } from "ethers";
 
+import { MerkleTree } from 'merkletreejs';
+import keccak256 from 'keccak256';
+
 const uniswapV2Router02address = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
 
 const getEventData = (
@@ -54,6 +57,20 @@ const getEventData = (
     return null;
 };
 
+const getTree = function (addresses: any[]) {
+    const leaves = addresses.map(addr => keccak256(web3.eth.abi.encodeParameters(['address'], [addr])))
+        
+    const tree = new MerkleTree(leaves, keccak256, {
+      sortLeaves: true,
+      sortPairs: true
+    })
+    return tree;
+}
+
+const getLeaf = function (address: any) {
+    return keccak256(web3.eth.abi.encodeParameters(['address'], [address]))
+}
+
 describe("ACDMPlatform - dao test", function () {
     let acdmPlatform: ACDMPlatform;
     let acdmToken: ACDMToken;
@@ -69,6 +86,9 @@ describe("ACDMPlatform - dao test", function () {
     let acc3: SignerWithAddress;
     let chairPerson: SignerWithAddress;
 
+    let tree: MerkleTree;
+    let wlAddresses;
+
     beforeEach(async () => {
         signers = await ethers.getSigners();
 
@@ -78,20 +98,69 @@ describe("ACDMPlatform - dao test", function () {
         acc3 = signers[3];
         chairPerson = signers[4];
 
+        wlAddresses = [
+            owner.address,
+            acc1.address,
+            acc2.address
+          ]
+        tree = getTree(wlAddresses);
+
         acdmToken = (await deployContract(owner, ACDMTokenArtifacts)) as ACDMToken;
 
         lptoken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
         xxxToken = (await deployContract(signers[0], XXXTokenArtifacts)) as XXXToken
-        staking = (await deployContract(signers[0], StakingArtifacts, [lptoken.address, xxxToken.address])) as Staking
-
+        staking = (await deployContract(signers[0], StakingArtifacts, 
+            [lptoken.address, xxxToken.address, tree.getHexRoot()])) as Staking
         dao = (await deployContract(signers[0], DAOArtifacts,
             [chairPerson.address, staking.address, ethers.utils.parseEther("10.0"), 3600 * 24 * 3])) as DAO;
 
         acdmPlatform = (await deployContract(owner, ACDMPlatformArtifacts,
             [acdmToken.address, dao.address, xxxToken.address])) as ACDMPlatform;
-
+        
+        await staking.setDao(dao.address)
         await acdmToken.setPlatform(acdmPlatform.address);
         await acdmPlatform.startFirstSaleRound();
+    })
+
+    it('setRoot test', async () => {
+        let newWlAddresses = [
+            acc1.address,
+            acc2.address
+          ]
+        let newTree = getTree(newWlAddresses);
+        let newRoot = newTree.getHexRoot();
+
+        const signature = web3.eth.abi.encodeFunctionCall({
+            name: 'setRoot',
+            type: 'function',
+            inputs: [{
+                type: 'bytes32',
+                name: '_root'
+            }
+            ]}, [newRoot]);
+        
+        await dao.connect(chairPerson).addProposal(staking.address, signature, "test");
+        await lptoken.mint(owner.address, ethers.utils.parseEther("100.0"))
+        await lptoken.approve(staking.address, ethers.utils.parseEther("100.0"));
+        await staking.stake(ethers.utils.parseEther("10.0"), tree.getHexProof(getLeaf(owner.address)));
+        await dao.vote(0, true);
+        await network.provider.send("evm_increaseTime", [3600 * 24 * 3 + 1])
+        await network.provider.send("evm_mine");
+        const receipt = await (
+            await dao.finishProposal(0))
+            .wait();
+
+        let eventProposalId = getEventData("CallStatus", dao, receipt).proposalId as BigNumber;
+        let status = getEventData("CallStatus", dao, receipt).status as Boolean;
+        expect(eventProposalId).to.eq(0)
+        expect(status).to.eq(true)
+
+        let newStackingRoot = await staking.getRoot();
+        expect(newStackingRoot).to.eq(newRoot)
+
+        await expect(staking.stake(ethers.utils.parseEther("10.0"), tree.getHexProof(getLeaf(owner.address)))).to.be.revertedWith(
+            "not in white list"
+        );
     })
 
     it('burnXXXToken test', async () => {
@@ -149,7 +218,7 @@ describe("ACDMPlatform - dao test", function () {
         await dao.connect(chairPerson).addProposal(acdmPlatform.address, signature, "test");
         await lptoken.mint(owner.address, ethers.utils.parseEther("100.0"))
         await lptoken.approve(staking.address, ethers.utils.parseEther("100.0"));
-        await staking.stake(ethers.utils.parseEther("10.0"));
+        await staking.stake(ethers.utils.parseEther("10.0"), tree.getHexProof(getLeaf(owner.address)));
         await dao.vote(0, true);
         await network.provider.send("evm_increaseTime", [3600 * 24 * 3 + 1])
         await network.provider.send("evm_mine");
@@ -201,7 +270,7 @@ describe("ACDMPlatform - dao test", function () {
         await dao.connect(chairPerson).addProposal(acdmPlatform.address, signature, "test");
         await lptoken.mint(owner.address, ethers.utils.parseEther("100.0"))
         await lptoken.approve(staking.address, ethers.utils.parseEther("100.0"));
-        await staking.stake(ethers.utils.parseEther("10.0"));
+        await staking.stake(ethers.utils.parseEther("10.0"), tree.getHexProof(getLeaf(owner.address)));
         await dao.vote(0, true);
         await network.provider.send("evm_increaseTime", [3600 * 24 * 3 + 1])
         await network.provider.send("evm_mine");
@@ -244,7 +313,7 @@ describe("ACDMPlatform - dao test", function () {
         await dao.connect(chairPerson).addProposal(acdmPlatform.address, signature, "test");
         await lptoken.mint(owner.address, ethers.utils.parseEther("100.0"))
         await lptoken.approve(staking.address, ethers.utils.parseEther("100.0"));
-        await staking.stake(ethers.utils.parseEther("10.0"));
+        await staking.stake(ethers.utils.parseEther("10.0"), tree.getHexProof(getLeaf(owner.address)));
         await dao.vote(0, true);
         await network.provider.send("evm_increaseTime", [3600 * 24 * 3 + 1])
         await network.provider.send("evm_mine");
@@ -289,7 +358,7 @@ describe("ACDMPlatform - dao test", function () {
         await dao.connect(chairPerson).addProposal(acdmPlatform.address, signature, "test");
         await lptoken.mint(owner.address, ethers.utils.parseEther("100.0"))
         await lptoken.approve(staking.address, ethers.utils.parseEther("100.0"));
-        await staking.stake(ethers.utils.parseEther("10.0"));
+        await staking.stake(ethers.utils.parseEther("10.0"), tree.getHexProof(getLeaf(owner.address)));
         await dao.vote(0, true);
         await network.provider.send("evm_increaseTime", [3600 * 24 * 3 + 1])
         await network.provider.send("evm_mine");
@@ -330,7 +399,7 @@ describe("ACDMPlatform - dao test", function () {
         await dao.connect(chairPerson).addProposal(acdmPlatform.address, signature, "test");
         await lptoken.mint(owner.address, ethers.utils.parseEther("100.0"))
         await lptoken.approve(staking.address, ethers.utils.parseEther("100.0"));
-        await staking.stake(ethers.utils.parseEther("10.0"));
+        await staking.stake(ethers.utils.parseEther("10.0"), tree.getHexProof(getLeaf(owner.address)));
         await dao.vote(0, true);
         await network.provider.send("evm_increaseTime", [3600 * 24 * 3 + 1])
         await network.provider.send("evm_mine");
